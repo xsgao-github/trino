@@ -71,7 +71,7 @@
   configuration property. ({issue}`15267`)
 * Fix failure to read Hive tables migrated to Iceberg with Apache Spark. ({issue}`11338`)
 * Fix failure for `CREATE FUNCTION` with SQL routine storage in Glue when
-  `hive.metastore.glue.catalogid` is set. ({issue}`22813`)
+  `hive.metastore.glue.catalogid` is set. ({issue}`22717`)
 
 ## Hudi connector
 
@@ -138,3 +138,8 @@
 ## SQL Server connector
 
 * Add support for the `execute` procedure. ({issue}`22556`)
+
+## SPI
+
+* Add `SystemAccessControl.getColumnMasks` as replacement for the deprecated
+  `SystemAccessControl.getColumnMask`. ({issue}`21997`)

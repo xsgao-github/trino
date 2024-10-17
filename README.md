@@ -12,7 +12,7 @@
     <img src="https://img.shields.io/maven-central/v/io.trino/trino-server.svg?label=Trino" alt="Trino download" />
   </a>
   <a href="https://github.com/jvm-repo-rebuild/reproducible-central/blob/master/content/io/trino/README.md" style="text-decoration: none">
-    <img src="https://img.shields.io/badge/Reproducible_Builds-ok-success?logoColor=959DA5&labelColor=333a41" alt="Reproducible builds supported" />
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jvm-repo-rebuild/reproducible-central/master/content/io/trino/badge.json" alt="Reproducible builds supported" />
   </a>
   <a href="https://trino.io/slack.html"  style="text-decoration: none">
     <img src="https://img.shields.io/static/v1?logo=slack&logoColor=959DA5&label=Slack&labelColor=333a41&message=join%20conversation&color=3AC358" alt="Trino Slack" />
@@ -23,6 +23,21 @@
 </p>
 
 ## Development
+
+Learn about development for all Trino organization projects:
+
+* [Vision](https://trino.io/development/vision)
+* [Contribution process](https://trino.io/development/process#contribution-process)
+* [Pull request and commit guidelines](https://trino.io/development/process#pull-request-and-commit-guidelines-)
+* [Release note guidelines](https://trino.io/development/process#release-note-guidelines-)
+
+Further information in the [development section of the
+website](https://trino.io/development) includes different roles, like
+contributors, reviewers, and maintainers, related processes, and other aspects.
+
+See [the Trino developer guide](https://trino.io/docs/current/develop.html) for
+information about the SPI, implementing connectors and other plugins plugins,
+the client protocol, writing tests and other lower level details.
 
 See [DEVELOPMENT](.github/DEVELOPMENT.md) for information about code style,
 development process, and guidelines.

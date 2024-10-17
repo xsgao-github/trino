@@ -1,7 +1,7 @@
 ---
 myst:
   substitutions:
-      default_domain_compaction_threshold: '`32`'
+      default_domain_compaction_threshold: '`256`'
 ---
 
 # Druid connector
@@ -124,7 +124,7 @@ metadata in the Druid database.
 
 ```{include} jdbc-procedures-flush.fragment
 ```
-```{include} jdbc-procedures-execute.fragment
+```{include} procedures-execute.fragment
 ```
 
 ### Table functions

@@ -109,6 +109,7 @@ public class TestDeltaLakeGlueMetastore
         Map<String, String> config = ImmutableMap.<String, String>builder()
                 .put("hive.metastore", "glue")
                 .put("delta.hide-non-delta-lake-tables", "true")
+                .put("fs.hadoop.enabled", "true")
                 .buildOrThrow();
 
         ConnectorContext context = new TestingConnectorContext();
@@ -128,7 +129,7 @@ public class TestDeltaLakeGlueMetastore
                 new DeltaLakeMetastoreModule(),
                 new DeltaLakeModule(),
                 // test setup
-                new FileSystemModule("test", context.getNodeManager(), context.getOpenTelemetry()));
+                new FileSystemModule("test", context.getNodeManager(), context.getOpenTelemetry(), false));
 
         Injector injector = app
                 .doNotInitializeLogging()

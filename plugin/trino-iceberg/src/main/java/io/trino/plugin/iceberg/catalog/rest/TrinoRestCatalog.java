@@ -69,6 +69,7 @@ import org.apache.iceberg.view.ViewBuilder;
 import org.apache.iceberg.view.ViewRepresentation;
 import org.apache.iceberg.view.ViewVersion;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -92,6 +93,7 @@ import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.UUID.randomUUID;
+import static java.util.stream.Collectors.joining;
 import static org.apache.iceberg.view.ViewProperties.COMMENT;
 
 public class TrinoRestCatalog
@@ -105,6 +107,8 @@ public class TrinoRestCatalog
     private final CatalogName catalogName;
     private final TypeManager typeManager;
     private final SessionType sessionType;
+    private final Map<String, String> credentials;
+    private final Namespace parentNamespace;
     private final String trinoVersion;
     private final boolean useUniqueTableLocation;
 
@@ -116,6 +120,8 @@ public class TrinoRestCatalog
             RESTSessionCatalog restSessionCatalog,
             CatalogName catalogName,
             SessionType sessionType,
+            Map<String, String> credentials,
+            Namespace parentNamespace,
             String trinoVersion,
             TypeManager typeManager,
             boolean useUniqueTableLocation)
@@ -123,6 +129,8 @@ public class TrinoRestCatalog
         this.restSessionCatalog = requireNonNull(restSessionCatalog, "restSessionCatalog is null");
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.sessionType = requireNonNull(sessionType, "sessionType is null");
+        this.credentials = ImmutableMap.copyOf(requireNonNull(credentials, "credentials is null"));
+        this.parentNamespace = requireNonNull(parentNamespace, "parentNamespace is null");
         this.trinoVersion = requireNonNull(trinoVersion, "trinoVersion is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         this.useUniqueTableLocation = useUniqueTableLocation;
@@ -131,14 +139,14 @@ public class TrinoRestCatalog
     @Override
     public boolean namespaceExists(ConnectorSession session, String namespace)
     {
-        return restSessionCatalog.namespaceExists(convert(session), Namespace.of(namespace));
+        return restSessionCatalog.namespaceExists(convert(session), toNamespace(namespace));
     }
 
     @Override
     public List<String> listNamespaces(ConnectorSession session)
     {
-        return restSessionCatalog.listNamespaces(convert(session)).stream()
-                .map(Namespace::toString)
+        return restSessionCatalog.listNamespaces(convert(session), parentNamespace).stream()
+                .map(this::toSchemaName)
                 .collect(toImmutableList());
     }
 
@@ -161,7 +169,7 @@ public class TrinoRestCatalog
     {
         try {
             // Return immutable metadata as direct modifications will not be reflected on the namespace
-            return ImmutableMap.copyOf(restSessionCatalog.loadNamespaceMetadata(convert(session), Namespace.of(namespace)));
+            return ImmutableMap.copyOf(restSessionCatalog.loadNamespaceMetadata(convert(session), toNamespace(namespace)));
         }
         catch (NoSuchNamespaceException e) {
             throw new SchemaNotFoundException(namespace);
@@ -210,10 +218,10 @@ public class TrinoRestCatalog
         ImmutableList.Builder<TableInfo> tables = ImmutableList.builder();
         for (Namespace restNamespace : namespaces) {
             listTableIdentifiers(restNamespace, () -> restSessionCatalog.listTables(sessionContext, restNamespace)).stream()
-                    .map(id -> new TableInfo(SchemaTableName.schemaTableName(id.namespace().toString(), id.name()), TableInfo.ExtendedRelationType.TABLE))
+                    .map(id -> new TableInfo(SchemaTableName.schemaTableName(toSchemaName(id.namespace()), id.name()), TableInfo.ExtendedRelationType.TABLE))
                     .forEach(tables::add);
             listTableIdentifiers(restNamespace, () -> restSessionCatalog.listViews(sessionContext, restNamespace)).stream()
-                    .map(id -> new TableInfo(SchemaTableName.schemaTableName(id.namespace().toString(), id.name()), TableInfo.ExtendedRelationType.OTHER_VIEW))
+                    .map(id -> new TableInfo(SchemaTableName.schemaTableName(toSchemaName(id.namespace()), id.name()), TableInfo.ExtendedRelationType.OTHER_VIEW))
                     .forEach(tables::add);
         }
         return tables.build();
@@ -354,12 +362,15 @@ public class TrinoRestCatalog
     @Override
     public Table loadTable(ConnectorSession session, SchemaTableName schemaTableName)
     {
+        Namespace namespace = toNamespace(schemaTableName.getSchemaName());
         try {
             return uncheckedCacheGet(
                     tableCache,
                     schemaTableName,
                     () -> {
-                        BaseTable baseTable = (BaseTable) restSessionCatalog.loadTable(convert(session), toIdentifier(schemaTableName));
+                        TableIdentifier identifier = TableIdentifier.of(namespace, schemaTableName.getTableName());
+
+                        BaseTable baseTable = (BaseTable) restSessionCatalog.loadTable(convert(session), identifier);
                         // Creating a new base table is necessary to adhere to Trino's expectations for quoted table names
                         return new BaseTable(baseTable.operations(), quotedTableName(schemaTableName));
                     });
@@ -368,7 +379,7 @@ public class TrinoRestCatalog
             if (e.getCause() instanceof NoSuchTableException) {
                 throw new TableNotFoundException(schemaTableName, e.getCause());
             }
-            throw new TrinoException(ICEBERG_CATALOG_ERROR, format("Failed to load table: %s", schemaTableName), e.getCause());
+            throw new TrinoException(ICEBERG_CATALOG_ERROR, format("Failed to load table: %s in %s namespace", schemaTableName.getTableName(), namespace), e.getCause());
         }
     }
 
@@ -613,7 +624,7 @@ public class TrinoRestCatalog
     private SessionCatalog.SessionContext convert(ConnectorSession session)
     {
         return switch (sessionType) {
-            case NONE -> new SessionContext(randomUUID().toString(), null, null, ImmutableMap.of(), session.getIdentity());
+            case NONE -> new SessionContext(randomUUID().toString(), null, credentials, ImmutableMap.of(), session.getIdentity());
             case USER -> {
                 String sessionId = format("%s-%s", session.getUser(), session.getSource().orElse("default"));
 
@@ -650,19 +661,39 @@ public class TrinoRestCatalog
         tableCache.invalidate(schemaTableName);
     }
 
-    private static TableIdentifier toIdentifier(SchemaTableName schemaTableName)
+    private Namespace toNamespace(String schemaName)
     {
-        return TableIdentifier.of(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+        if (parentNamespace.isEmpty()) {
+            return Namespace.of(schemaName);
+        }
+        return Namespace.of(parentNamespace + "." + schemaName);
+    }
+
+    private String toSchemaName(Namespace namespace)
+    {
+        if (this.parentNamespace.isEmpty()) {
+            return namespace.toString();
+        }
+        return Arrays.stream(namespace.levels(), this.parentNamespace.length(), namespace.length())
+                .collect(joining("."));
+    }
+
+    private TableIdentifier toIdentifier(SchemaTableName schemaTableName)
+    {
+        if (parentNamespace.isEmpty()) {
+            return TableIdentifier.of(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+        }
+        return TableIdentifier.of(Namespace.of(parentNamespace + "." + schemaTableName.getSchemaName()), schemaTableName.getTableName());
     }
 
     private List<Namespace> listNamespaces(ConnectorSession session, Optional<String> namespace)
     {
         if (namespace.isEmpty()) {
             return listNamespaces(session).stream()
-                    .map(Namespace::of)
+                    .map(this::toNamespace)
                     .collect(toImmutableList());
         }
 
-        return ImmutableList.of(Namespace.of(namespace.get()));
+        return ImmutableList.of(toNamespace(namespace.get()));
     }
 }

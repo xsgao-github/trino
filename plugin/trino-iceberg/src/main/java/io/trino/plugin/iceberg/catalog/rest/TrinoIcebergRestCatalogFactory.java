@@ -14,6 +14,7 @@
 package io.trino.plugin.iceberg.catalog.rest;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 import com.google.inject.Inject;
 import io.trino.plugin.hive.NodeVersion;
@@ -27,13 +28,18 @@ import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.TypeManager;
 import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.rest.HTTPClient;
 import org.apache.iceberg.rest.RESTSessionCatalog;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.iceberg.rest.auth.OAuth2Properties.CREDENTIAL;
+import static org.apache.iceberg.rest.auth.OAuth2Properties.TOKEN;
 
 public class TrinoIcebergRestCatalogFactory
         implements TrinoCatalogFactory
@@ -44,6 +50,7 @@ public class TrinoIcebergRestCatalogFactory
     private final URI serverUri;
     private final Optional<String> prefix;
     private final Optional<String> warehouse;
+    private final Namespace parentNamespace;
     private final SessionType sessionType;
     private final boolean vendedCredentialsEnabled;
     private final SecurityProperties securityProperties;
@@ -70,6 +77,7 @@ public class TrinoIcebergRestCatalogFactory
         this.serverUri = restConfig.getBaseUri();
         this.prefix = restConfig.getPrefix();
         this.warehouse = restConfig.getWarehouse();
+        this.parentNamespace = restConfig.getParentNamespace();
         this.sessionType = restConfig.getSessionType();
         this.vendedCredentialsEnabled = restConfig.isVendedCredentialsEnabled();
         this.securityProperties = requireNonNull(securityProperties, "securityProperties is null");
@@ -108,6 +116,18 @@ public class TrinoIcebergRestCatalogFactory
             icebergCatalog = icebergCatalogInstance;
         }
 
-        return new TrinoRestCatalog(icebergCatalog, catalogName, sessionType, trinoVersion, typeManager, uniqueTableLocation);
+        // `OAuth2Properties.SCOPE` is not set as scope passed through credentials is unused in
+        // https://github.com/apache/iceberg/blob/229d8f6fcd109e6c8943ea7cbb41dab746c6d0ed/core/src/main/java/org/apache/iceberg/rest/auth/OAuth2Util.java#L714-L721
+        Map<String, String> credentials = Maps.filterKeys(securityProperties.get(), key -> Set.of(TOKEN, CREDENTIAL).contains(key));
+
+        return new TrinoRestCatalog(
+                icebergCatalog,
+                catalogName,
+                sessionType,
+                credentials,
+                parentNamespace,
+                trinoVersion,
+                typeManager,
+                uniqueTableLocation);
     }
 }

@@ -19,6 +19,7 @@ import io.airlift.units.DataSize;
 import io.opentelemetry.api.OpenTelemetry;
 import io.trino.filesystem.s3.S3FileSystemConfig;
 import io.trino.filesystem.s3.S3FileSystemFactory;
+import io.trino.filesystem.s3.S3FileSystemStats;
 import io.trino.metastore.TableInfo;
 import io.trino.plugin.hive.NodeVersion;
 import io.trino.plugin.iceberg.ColumnIdentity;
@@ -159,7 +160,7 @@ public class TestTrinoSnowflakeCatalog
                                 .setAwsAccessKey(S3_ACCESS_KEY)
                                 .setAwsSecretKey(S3_SECRET_KEY)
                                 .setRegion(S3_REGION)
-                                .setStreamingPartSize(DataSize.valueOf("5.5MB")));
+                                .setStreamingPartSize(DataSize.valueOf("5.5MB")), new S3FileSystemStats());
 
         CatalogName catalogName = new CatalogName("snowflake_test_catalog");
         TrinoIcebergSnowflakeCatalogFileIOFactory catalogFileIOFactory = new TrinoIcebergSnowflakeCatalogFileIOFactory(s3FileSystemFactory, ConnectorIdentity.ofUser("trino"));
@@ -215,7 +216,9 @@ public class TestTrinoSnowflakeCatalog
                 (connectorIdentity, fileIOProperties) -> {
                     throw new UnsupportedOperationException();
                 },
-                new TableStatisticsWriter(new NodeVersion("test-version")));
+                new TableStatisticsWriter(new NodeVersion("test-version")),
+                Optional.empty(),
+                false);
         assertThat(icebergMetadata.schemaExists(SESSION, namespace)).as("icebergMetadata.schemaExists(namespace)")
                 .isTrue();
         assertThat(icebergMetadata.schemaExists(SESSION, schema)).as("icebergMetadata.schemaExists(schema)")
@@ -361,7 +364,7 @@ public class TestTrinoSnowflakeCatalog
     {
         TrinoCatalog catalog = createTrinoCatalog(false);
         Map<String, Object> metadata = catalog.loadNamespaceMetadata(SESSION, SNOWFLAKE_TEST_SCHEMA);
-        assertThat(metadata.isEmpty()).isTrue();
+        assertThat(metadata).isEmpty();
     }
 
     @Test

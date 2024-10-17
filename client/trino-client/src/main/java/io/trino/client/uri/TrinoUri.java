@@ -52,6 +52,7 @@ import static io.trino.client.uri.ConnectionProperties.CLIENT_TAGS;
 import static io.trino.client.uri.ConnectionProperties.DISABLE_COMPRESSION;
 import static io.trino.client.uri.ConnectionProperties.DNS_RESOLVER;
 import static io.trino.client.uri.ConnectionProperties.DNS_RESOLVER_CONTEXT;
+import static io.trino.client.uri.ConnectionProperties.ENCODING;
 import static io.trino.client.uri.ConnectionProperties.EXPLICIT_PREPARE;
 import static io.trino.client.uri.ConnectionProperties.EXTERNAL_AUTHENTICATION;
 import static io.trino.client.uri.ConnectionProperties.EXTERNAL_AUTHENTICATION_REDIRECT_HANDLERS;
@@ -99,7 +100,6 @@ import static io.trino.client.uri.ConnectionProperties.USER;
 import static io.trino.client.uri.LoggingLevel.NONE;
 import static java.lang.String.CASE_INSENSITIVE_ORDER;
 import static java.lang.String.format;
-import static java.lang.System.getProperty;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 
@@ -191,9 +191,9 @@ public class TrinoUri
         return resolveRequired(USER);
     }
 
-    public String getUser()
+    public Optional<String> getUser()
     {
-        return resolveWithDefault(USER, getProperty("user.name"));
+        return resolveOptional(USER);
     }
 
     public boolean hasPassword()
@@ -421,6 +421,11 @@ public class TrinoUri
         return resolveWithDefault(DISABLE_COMPRESSION, false);
     }
 
+    public Optional<String> getEncoding()
+    {
+        return resolveOptional(ENCODING);
+    }
+
     public boolean isAssumeLiteralNamesInMetadataCallsForNonConformingClients()
     {
         return resolveWithDefault(ASSUME_LITERAL_NAMES_IN_METADATA_CALLS_FOR_NON_CONFORMING_CLIENTS, false);
@@ -486,10 +491,10 @@ public class TrinoUri
     {
         return ClientSession.builder()
                 .server(getHttpUri())
-                .principal(Optional.of(getUser()))
+                .user(getUser())
                 .path(getPath().orElse(ImmutableList.of()))
                 .clientRequestTimeout(getTimeout())
-                .user(getSessionUser())
+                .sessionUser(getSessionUser())
                 .clientTags(getClientTags().orElse(ImmutableSet.of()))
                 .source(getSource().orElse(null))
                 .traceToken(getTraceToken())
@@ -502,7 +507,8 @@ public class TrinoUri
                 .credentials(getExtraCredentials())
                 .transactionId(null)
                 .resourceEstimates(getResourceEstimates())
-                .compressionDisabled(isCompressionDisabled());
+                .compressionDisabled(isCompressionDisabled())
+                .encoding(getEncoding());
     }
 
     protected static Set<ConnectionProperty<?, ?>> allProperties()
@@ -794,6 +800,11 @@ public class TrinoUri
         public Builder setDisableCompression(Boolean disableCompression)
         {
             return setProperty(DISABLE_COMPRESSION, requireNonNull(disableCompression, "disableCompression is null"));
+        }
+
+        public Builder setEncoding(String encoding)
+        {
+            return setProperty(ENCODING, requireNonNull(encoding, "encoding is null"));
         }
 
         public Builder setAssumeLiteralNamesInMetadataCallsForNonConformingClients(boolean value)

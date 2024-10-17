@@ -1,7 +1,7 @@
 ---
 myst:
   substitutions:
-    default_domain_compaction_threshold: '`32`'
+    default_domain_compaction_threshold: '`256`'
 ---
 
 # Redshift connector
@@ -166,7 +166,7 @@ statements, the connector supports the following features:
 
 ```{include} jdbc-procedures-flush.fragment
 ```
-```{include} jdbc-procedures-execute.fragment
+```{include} procedures-execute.fragment
 ```
 
 ### Table functions

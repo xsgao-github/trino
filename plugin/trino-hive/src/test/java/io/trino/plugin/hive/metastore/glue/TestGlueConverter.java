@@ -220,7 +220,7 @@ class TestGlueConverter
                 .build();
         LanguageFunction actual = GlueConverter.fromGlueFunction(function);
 
-        assertThat(input.resourceUris().size()).isEqualTo(4);
+        assertThat(input.resourceUris().size()).isEqualTo(3);
         assertThat(actual).isEqualTo(expected);
 
         // verify that the owner comes from the metastore
@@ -308,7 +308,7 @@ class TestGlueConverter
                 .partitionKeys(ImmutableList.of())
                 .build();
         io.trino.metastore.Table trinoTable = GlueConverter.fromGlueTable(table, table.databaseName());
-        assertThat(trinoTable.getPartitionColumns().isEmpty()).isTrue();
+        assertThat(trinoTable.getPartitionColumns()).isEmpty();
     }
 
     @Test

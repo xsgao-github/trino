@@ -14,7 +14,6 @@
 package io.trino.spi.connector;
 
 import io.airlift.slice.Slice;
-import io.trino.spi.ErrorCode;
 import io.trino.spi.Experimental;
 import io.trino.spi.RefreshType;
 import io.trino.spi.TrinoException;
@@ -54,18 +53,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.UnaryOperator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
-import static io.trino.spi.ErrorType.EXTERNAL;
 import static io.trino.spi.StandardErrorCode.FUNCTION_IMPLEMENTATION_ERROR;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
-import static io.trino.spi.StandardErrorCode.NOT_FOUND;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
-import static io.trino.spi.StandardErrorCode.TABLE_NOT_FOUND;
-import static io.trino.spi.StandardErrorCode.UNSUPPORTED_TABLE_TYPE;
-import static io.trino.spi.connector.SaveMode.IGNORE;
 import static io.trino.spi.connector.SaveMode.REPLACE;
 import static io.trino.spi.expression.Constant.FALSE;
 import static io.trino.spi.expression.StandardFunctions.AND_FUNCTION_NAME;
@@ -133,7 +125,10 @@ public interface ConnectorMetadata
      *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
      * </pre>
      * unless {@code retryMode} is set to {@code NO_RETRIES}.
+     *
+     * @deprecated {Use {@link #getTableHandleForExecute(ConnectorSession, ConnectorAccessControl, ConnectorTableHandle, String, Map, RetryMode)}}
      */
+    @Deprecated
     default Optional<ConnectorTableExecuteHandle> getTableHandleForExecute(
             ConnectorSession session,
             ConnectorTableHandle tableHandle,
@@ -142,6 +137,27 @@ public interface ConnectorMetadata
             RetryMode retryMode)
     {
         throw new TrinoException(NOT_SUPPORTED, "This connector does not support table procedures");
+    }
+
+    /**
+     * Create initial handle for execution of table procedure. The handle will be used through planning process. It will be converted to final
+     * handle used for execution via @{link {@link ConnectorMetadata#beginTableExecute}
+     * <p>
+     * If connector does not support execution with retries, the method should throw:
+     * <pre>
+     *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
+     * </pre>
+     * unless {@code retryMode} is set to {@code NO_RETRIES}.
+     */
+    default Optional<ConnectorTableExecuteHandle> getTableHandleForExecute(
+            ConnectorSession session,
+            ConnectorAccessControl accessControl,
+            ConnectorTableHandle tableHandle,
+            String procedureName,
+            Map<String, Object> executeProperties,
+            RetryMode retryMode)
+    {
+        return getTableHandleForExecute(session, tableHandle, procedureName, executeProperties, retryMode);
     }
 
     default Optional<ConnectorTableLayout> getLayoutForTableExecute(ConnectorSession session, ConnectorTableExecuteHandle tableExecuteHandle)
@@ -402,23 +418,6 @@ public interface ConnectorMetadata
                         return RelationCommentMetadata.forRelation(tableName, getTableMetadata(session, tableHandle).getComment());
                     }
                     catch (RuntimeException e) {
-                        boolean silent = false;
-                        if (e instanceof TrinoException trinoException) {
-                            ErrorCode errorCode = trinoException.getErrorCode();
-                            silent = errorCode.equals(UNSUPPORTED_TABLE_TYPE.toErrorCode()) ||
-                                    // e.g. table deleted concurrently
-                                    errorCode.equals(TABLE_NOT_FOUND.toErrorCode()) ||
-                                    errorCode.equals(NOT_FOUND.toErrorCode()) ||
-                                    // e.g. Iceberg/Delta table being deleted concurrently resulting in failure to load metadata from filesystem
-                                    errorCode.getType() == EXTERNAL;
-                        }
-                        if (silent) {
-                            Helper.juliLogger.log(Level.FINE, e, () -> "Failed to get metadata for table: " + tableName);
-                        }
-                        else {
-                            // getTableHandle or getTableMetadata failed call may fail if table disappeared during listing or is unsupported.
-                            Helper.juliLogger.log(Level.WARNING, e, () -> "Failed to get metadata for table: " + tableName);
-                        }
                         // Since the getTableHandle did not return null (i.e. succeeded or failed), we assume the table would be returned by listTables
                         return RelationCommentMetadata.forRelation(tableName, Optional.empty());
                     }
@@ -481,18 +480,6 @@ public interface ConnectorMetadata
 
     /**
      * Creates a table using the specified table metadata.
-     *
-     * @throws TrinoException with {@code ALREADY_EXISTS} if the table already exists and {@code ignoreExisting} is not set
-     * @deprecated use {@link #createTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, SaveMode saveMode)}
-     */
-    @Deprecated
-    default void createTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, boolean ignoreExisting)
-    {
-        throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating tables");
-    }
-
-    /**
-     * Creates a table using the specified table metadata.
      * IGNORE means the table is created using CREATE ... IF NOT EXISTS syntax.
      * REPLACE means the table is created using CREATE OR REPLACE syntax.
      *
@@ -503,8 +490,7 @@ public interface ConnectorMetadata
         if (saveMode == REPLACE) {
             throw new TrinoException(NOT_SUPPORTED, "This connector does not support replacing tables");
         }
-        // Delegate to deprecated SPI to not break existing connectors
-        createTable(session, tableMetadata, saveMode == IGNORE);
+        throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating tables");
     }
 
     /**
@@ -744,23 +730,6 @@ public interface ConnectorMetadata
 
     /**
      * Begin the atomic creation of a table with data.
-     * <p>
-     * If connector does not support execution with retries, the method should throw:
-     * <pre>
-     *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
-     * </pre>
-     * unless {@code retryMode} is set to {@code NO_RETRIES}.
-     *
-     * @deprecated use {@link #beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional layout, RetryMode retryMode, boolean replace)}
-     */
-    @Deprecated
-    default ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorTableLayout> layout, RetryMode retryMode)
-    {
-        throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating tables with data");
-    }
-
-    /**
-     * Begin the atomic creation of a table with data.
      * If connector does not support execution with retries, the method should throw:
      * <pre>
      *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
@@ -770,10 +739,10 @@ public interface ConnectorMetadata
     default ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorTableLayout> layout, RetryMode retryMode, boolean replace)
     {
         // Redirect to deprecated SPI to not break existing connectors
-        if (!replace) {
-            return beginCreateTable(session, tableMetadata, layout, retryMode);
+        if (replace) {
+            throw new TrinoException(NOT_SUPPORTED, "This connector does not support replacing tables");
         }
-        throw new TrinoException(NOT_SUPPORTED, "This connector does not support replacing tables");
+        throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating tables with data");
     }
 
     /**
@@ -819,17 +788,6 @@ public interface ConnectorMetadata
 
     /**
      * Finish insert query
-     *
-     * @deprecated use {@link #finishInsert(ConnectorSession, ConnectorInsertTableHandle, List, Collection, Collection)}
-     */
-    @Deprecated
-    default Optional<ConnectorOutputMetadata> finishInsert(ConnectorSession session, ConnectorInsertTableHandle insertHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
-    {
-        throw new TrinoException(GENERIC_INTERNAL_ERROR, "ConnectorMetadata beginInsert() is implemented without finishInsert()");
-    }
-
-    /**
-     * Finish insert query
      */
     default Optional<ConnectorOutputMetadata> finishInsert(
             ConnectorSession session,
@@ -838,8 +796,7 @@ public interface ConnectorMetadata
             Collection<Slice> fragments,
             Collection<ComputedStatistics> computedStatistics)
     {
-        // Delegate to deprecated SPI to not break existing connectors
-        return finishInsert(session, insertHandle, fragments, computedStatistics);
+        throw new TrinoException(GENERIC_INTERNAL_ERROR, "ConnectorMetadata beginInsert() is implemented without finishInsert()");
     }
 
     /**
@@ -867,29 +824,12 @@ public interface ConnectorMetadata
      * </pre>
      * unless {@code retryMode} is set to {@code NO_RETRIES}.
      *
-     * @deprecated Please use new method which includes {@code RefreshType}: {@link ConnectorMetadata#beginRefreshMaterializedView(ConnectorSession, ConnectorTableHandle, List, RetryMode, RefreshType)}
-     */
-    @Deprecated
-    default ConnectorInsertTableHandle beginRefreshMaterializedView(ConnectorSession session, ConnectorTableHandle tableHandle, List<ConnectorTableHandle> sourceTableHandles, RetryMode retryMode)
-    {
-        throw new TrinoException(NOT_SUPPORTED, "This connector does not support materialized views");
-    }
-
-    /**
-     * Begin materialized view query.
-     * <p>
-     * If connector does not support execution with retries, the method should throw:
-     * <pre>
-     *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
-     * </pre>
-     * unless {@code retryMode} is set to {@code NO_RETRIES}.
-     *
      * {@code refreshType} is a signal from the engine to the connector whether the MV refresh could be done incrementally or only fully, based on the plan.
      * The connector is not obligated to perform the refresh in the fashion prescribed by {@code refreshType}, this is merely a hint from the engine that the refresh could be append-only.
      */
     default ConnectorInsertTableHandle beginRefreshMaterializedView(ConnectorSession session, ConnectorTableHandle tableHandle, List<ConnectorTableHandle> sourceTableHandles, RetryMode retryMode, RefreshType refreshType)
     {
-        return beginRefreshMaterializedView(session, tableHandle, sourceTableHandles, retryMode);
+        throw new TrinoException(NOT_SUPPORTED, "This connector does not support materialized views");
     }
 
     /**
@@ -968,22 +908,6 @@ public interface ConnectorMetadata
      * be serialized by the connector for permanent storage.
      */
     default void createView(ConnectorSession session, SchemaTableName viewName, ConnectorViewDefinition definition, Map<String, Object> viewProperties, boolean replace)
-    {
-        if (viewProperties.isEmpty()) {
-            createView(session, viewName, definition, replace);
-            return;
-        }
-        throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating views");
-    }
-
-    /**
-     * Create the specified view. The view definition is intended to
-     * be serialized by the connector for permanent storage.
-     *
-     * @deprecated use {@link #createView(ConnectorSession, SchemaTableName, ConnectorViewDefinition, Map, boolean)}
-     */
-    @Deprecated
-    default void createView(ConnectorSession session, SchemaTableName viewName, ConnectorViewDefinition definition, boolean replace)
     {
         throw new TrinoException(NOT_SUPPORTED, "This connector does not support creating views");
     }
@@ -1835,12 +1759,5 @@ public interface ConnectorMetadata
     default WriterScalingOptions getInsertWriterScalingOptions(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         return WriterScalingOptions.DISABLED;
-    }
-
-    final class Helper
-    {
-        private Helper() {}
-
-        static final Logger juliLogger = Logger.getLogger(ConnectorMetadata.class.getName());
     }
 }

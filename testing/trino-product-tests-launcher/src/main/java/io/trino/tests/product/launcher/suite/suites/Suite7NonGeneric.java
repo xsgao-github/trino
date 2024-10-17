@@ -19,6 +19,8 @@ import io.trino.tests.product.launcher.env.EnvironmentDefaults;
 import io.trino.tests.product.launcher.env.environment.EnvMultinodeKerberosKudu;
 import io.trino.tests.product.launcher.env.environment.EnvMultinodeMinioDataLakeTaskRetriesFilesystem;
 import io.trino.tests.product.launcher.env.environment.EnvMultinodePostgresql;
+import io.trino.tests.product.launcher.env.environment.EnvMultinodePostgresqlSpooling;
+import io.trino.tests.product.launcher.env.environment.EnvMultinodeSecretsProvider;
 import io.trino.tests.product.launcher.env.environment.EnvMultinodeSqlserver;
 import io.trino.tests.product.launcher.env.environment.EnvSinglenodeKerberosHdfsImpersonationCrossRealm;
 import io.trino.tests.product.launcher.env.environment.EnvSinglenodeSparkHive;
@@ -55,6 +57,12 @@ public class Suite7NonGeneric
 
         return ImmutableList.of(
                 testOnEnvironment(EnvMultinodePostgresql.class)
+                        .withGroups(CONFIGURED_FEATURES, POSTGRESQL)
+                        .build(),
+                testOnEnvironment(EnvMultinodePostgresqlSpooling.class)
+                        .withGroups(CONFIGURED_FEATURES, POSTGRESQL)
+                        .build(),
+                testOnEnvironment(EnvMultinodeSecretsProvider.class)
                         .withGroups(CONFIGURED_FEATURES, POSTGRESQL)
                         .build(),
                 testOnEnvironment(EnvMultinodeSqlserver.class)

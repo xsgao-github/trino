@@ -71,7 +71,7 @@ are also available. They are discussed later in this topic.
   - `5m`
 * - `hive.metastore-cache-maximum-size`
   - Maximum number of metastore data objects in the Hive metastore cache.
-  - `10000`
+  - `20000`
 * - `hive.metastore-refresh-interval`
   - Asynchronously refresh cached metastore data after access if it is older
     than this but is not yet expired, allowing subsequent accesses to see fresh
@@ -227,7 +227,7 @@ when the `hive.metastore.uri` uses the `http://` or `https://` protocol.
     `header1:value1,header2:value2` sends two headers `header1` and `header2`
     with the values as `value1` and `value2`. Escape comma (`,`) or colon(`:`)
     characters in a header name or value with a backslash (`\`). Use
-    `X-Databricks-Unity-Catalog-Name=[catalog_name]` to configure the required
+    `X-Databricks-Catalog-Name:[catalog_name]` to configure the required
     header values for Unity catalog.
 :::
 
@@ -470,6 +470,9 @@ following properties:
 * - `iceberg.rest-catalog.warehouse`
   - Warehouse identifier/location for the catalog (optional). Example:
     `s3://my_bucket/warehouse_location`
+* - `iceberg.rest-catalog.parent-namespace`
+  - The namespace to use with the REST catalog server. Example:
+    `main`
 * - `iceberg.rest-catalog.security`
   - The type of security to use (default: `NONE`).  `OAUTH2` requires either a
     `token` or `credential`. Example: `OAUTH2`
@@ -483,6 +486,9 @@ following properties:
   - The credential to exchange for a token in the OAuth2 client credentials flow
     with the server. A `token` or `credential` is required for `OAUTH2`
     security. Example: `AbCdEf123456`
+* - `iceberg.rest-catalog.oauth2.scope`
+  - Scope to be used when communicating with the REST Catalog. Applicable only
+    when using `credential`.
 :::
 
 The following example shows a minimal catalog configuration using an Iceberg
@@ -492,6 +498,19 @@ REST metadata catalog:
 connector.name=iceberg
 iceberg.catalog.type=rest
 iceberg.rest-catalog.uri=http://iceberg-with-rest:8181
+```
+
+`iceberg.security` must be `read_only` when connecting to Databricks Unity catalog
+using an Iceberg REST catalog:
+
+```properties
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=https://dbc-12345678-9999.cloud.databricks.com/api/2.1/unity-catalog/iceberg
+iceberg.security=read_only
+iceberg.rest-catalog.security=OAUTH2
+iceberg.rest-catalog.oauth2.token=***
+iceberg.rest-catalog.parent-namespace=test_namespace
 ```
 
 The REST catalog supports [view management](sql-view-management) 

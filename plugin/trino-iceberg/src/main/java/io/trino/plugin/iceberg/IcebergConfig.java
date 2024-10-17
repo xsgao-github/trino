@@ -67,6 +67,7 @@ public class IcebergConfig
     private boolean collectExtendedStatisticsOnWrite = true;
     private boolean projectionPushdownEnabled = true;
     private boolean registerTableProcedureEnabled;
+    private boolean addFilesProcedureEnabled;
     private Optional<String> hiveCatalogName = Optional.empty();
     private int formatVersion = FORMAT_VERSION_SUPPORT_MAX;
     private Duration expireSnapshotsMinRetention = new Duration(7, DAYS);
@@ -85,6 +86,7 @@ public class IcebergConfig
     private Set<String> queryPartitionFilterRequiredSchemas = ImmutableSet.of();
     private int splitManagerThreads = Runtime.getRuntime().availableProcessors() * 2;
     private boolean incrementalRefreshEnabled = true;
+    private boolean metadataCacheEnabled = true;
 
     public CatalogType getCatalogType()
     {
@@ -251,6 +253,19 @@ public class IcebergConfig
     public IcebergConfig setRegisterTableProcedureEnabled(boolean registerTableProcedureEnabled)
     {
         this.registerTableProcedureEnabled = registerTableProcedureEnabled;
+        return this;
+    }
+
+    public boolean isAddFilesProcedureEnabled()
+    {
+        return addFilesProcedureEnabled;
+    }
+
+    @Config("iceberg.add_files-procedure.enabled")
+    @ConfigDescription("Allow users to call the add_files procedure")
+    public IcebergConfig setAddFilesProcedureEnabled(boolean addFilesProcedureEnabled)
+    {
+        this.addFilesProcedureEnabled = addFilesProcedureEnabled;
         return this;
     }
 
@@ -468,5 +483,18 @@ public class IcebergConfig
     public boolean isStorageSchemaSetWhenHidingIsEnabled()
     {
         return hideMaterializedViewStorageTable && materializedViewsStorageSchema.isPresent();
+    }
+
+    public boolean isMetadataCacheEnabled()
+    {
+        return metadataCacheEnabled;
+    }
+
+    @Config("iceberg.metadata-cache.enabled")
+    @ConfigDescription("Enables in-memory caching of metadata files on coordinator if fs.cache.enabled is not set to true")
+    public IcebergConfig setMetadataCacheEnabled(boolean metadataCacheEnabled)
+    {
+        this.metadataCacheEnabled = metadataCacheEnabled;
+        return this;
     }
 }

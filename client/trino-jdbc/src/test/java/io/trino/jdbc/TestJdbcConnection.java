@@ -142,6 +142,7 @@ public class TestJdbcConnection
                 .put("hive.metastore", "file")
                 .put("hive.metastore.catalog.dir", server.getBaseDataDir().resolve("hive").toAbsolutePath().toString())
                 .put("hive.security", "sql-standard")
+                .put("fs.hadoop.enabled", "true")
                 .buildOrThrow());
         server.getInstance(com.google.inject.Key.get(PasswordAuthenticatorManager.class)).setAuthenticators(TestJdbcConnection::authenticate);
         server.installPlugin(new BlackHolePlugin());

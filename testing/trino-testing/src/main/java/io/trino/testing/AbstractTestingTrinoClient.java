@@ -106,7 +106,7 @@ public abstract class AbstractTestingTrinoClient<T>
         ClientSession clientSession = toClientSession(session, trinoServer.getBaseUrl(), new Duration(2, TimeUnit.MINUTES));
         try (StatementClient client = statementClientFactory.create(httpClient, session, clientSession, sql)) {
             while (client.isRunning()) {
-                resultsSession.addResults(client.currentStatusInfo(), client.currentData());
+                resultsSession.addResults(client.currentStatusInfo(), client.currentRows());
                 client.advance();
             }
 
@@ -159,7 +159,7 @@ public abstract class AbstractTestingTrinoClient<T>
         estimates.getPeakMemoryBytes().ifPresent(e -> resourceEstimates.put(PEAK_MEMORY, e.toString()));
         return ClientSession.builder()
                 .server(server)
-                .principal(Optional.of(session.getIdentity().getUser()))
+                .user(Optional.of(session.getIdentity().getUser()))
                 .source(session.getSource().orElse("test"))
                 .traceToken(session.getTraceToken())
                 .clientTags(session.getClientTags())

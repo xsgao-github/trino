@@ -230,14 +230,14 @@ public final class ShowQueriesRewrite
         protected Node visitExplain(Explain node, Void context)
         {
             Statement statement = (Statement) process(node.getStatement(), null);
-            return new Explain(node.getLocation(), statement, node.getOptions());
+            return new Explain(node.getLocation().orElseThrow(), statement, node.getOptions());
         }
 
         @Override
         protected Node visitExplainAnalyze(ExplainAnalyze node, Void context)
         {
             Statement statement = (Statement) process(node.getStatement(), null);
-            return new ExplainAnalyze(node.getLocation(), statement, node.isVerbose());
+            return new ExplainAnalyze(node.getLocation().orElseThrow(), statement, node.isVerbose());
         }
 
         @Override
@@ -553,7 +553,7 @@ public final class ShowQueriesRewrite
             List<Property> propertyNodes = toSqlProperties("materialized view " + objectName, INVALID_MATERIALIZED_VIEW_PROPERTY, properties, allMaterializedViewProperties);
 
             String sql = formatSql(new CreateMaterializedView(
-                    Optional.empty(),
+                    node.getLocation().orElseThrow(),
                     QualifiedName.of(ImmutableList.of(catalogName, schemaName, tableName)),
                     query,
                     false,
@@ -676,6 +676,7 @@ public final class ShowQueriesRewrite
             Optional<PrincipalSpecification> owner = metadata.getSchemaOwner(session, schemaName).map(MetadataUtil::createPrincipal);
 
             CreateSchema createSchema = new CreateSchema(
+                    node.getLocation().orElseThrow(),
                     qualifiedSchemaName,
                     false,
                     propertyNodes,

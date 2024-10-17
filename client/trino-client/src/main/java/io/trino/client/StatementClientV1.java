@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.errorprone.annotations.ThreadSafe;
 import io.airlift.units.Duration;
+import io.trino.client.spooling.SegmentLoader;
 import jakarta.annotation.Nullable;
 import okhttp3.Call;
 import okhttp3.Headers;
@@ -103,7 +104,10 @@ class StatementClientV1
 
     private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
 
-    public StatementClientV1(Call.Factory httpCallFactory, ClientSession session, String query, Optional<Set<String>> clientCapabilities)
+    // Data accessor for raw and encoded data
+    private final ResultRowsDecoder resultRowsDecoder;
+
+    public StatementClientV1(Call.Factory httpCallFactory, Call.Factory segmentHttpCallFactory, ClientSession session, String query, Optional<Set<String>> clientCapabilities)
     {
         requireNonNull(httpCallFactory, "httpCallFactory is null");
         requireNonNull(session, "session is null");
@@ -113,11 +117,11 @@ class StatementClientV1
         this.timeZone = session.getTimeZone();
         this.query = query;
         this.requestTimeoutNanos = session.getClientRequestTimeout();
-        this.user = Stream.of(session.getAuthorizationUser(), session.getUser(), session.getPrincipal())
+        this.user = Stream.of(session.getAuthorizationUser(), session.getSessionUser(), session.getUser())
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .findFirst();
-        this.originalUser = Stream.of(session.getUser(), session.getPrincipal())
+        this.originalUser = Stream.of(session.getSessionUser(), session.getUser())
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .findFirst();
@@ -126,14 +130,15 @@ class StatementClientV1
                 .collect(toImmutableSet())));
         this.compressionDisabled = session.isCompressionDisabled();
 
-        Request request = buildQueryRequest(session, query);
+        this.resultRowsDecoder = new ResultRowsDecoder(new SegmentLoader(requireNonNull(segmentHttpCallFactory, "segmentHttpCallFactory is null")));
 
+        Request request = buildQueryRequest(session, query, session.getEncoding());
         // Pass empty as materializedJsonSizeLimit to always materialize the first response
         // to avoid losing the response body if the initial response parsing fails
         executeRequest(request, "starting query", OptionalLong.empty(), this::isTransient);
     }
 
-    private Request buildQueryRequest(ClientSession session, String query)
+    private Request buildQueryRequest(ClientSession session, String query, Optional<String> requestedEncoding)
     {
         HttpUrl url = HttpUrl.get(session.getServer());
         if (url == null) {
@@ -195,6 +200,8 @@ class StatementClientV1
 
         builder.addHeader(TRINO_HEADERS.requestClientCapabilities(), clientCapabilities);
 
+        requestedEncoding.ifPresent(encoding -> builder.addHeader(TRINO_HEADERS.requestQueryDataEncoding(), encoding));
+
         return builder.build();
     }
 
@@ -247,10 +254,23 @@ class StatementClientV1
     }
 
     @Override
-    public QueryData currentData()
+    public ResultRows currentRows()
     {
         checkState(isRunning(), "current position is not valid (cursor past end)");
-        return currentResults.get();
+        return resultRowsDecoder.toRows(currentResults.get());
+    }
+
+    @Override
+    public QueryData currentData() // Raw over the wire representation
+    {
+        checkState(isRunning(), "current position is not valid (cursor past end)");
+        QueryResults queryResults = currentResults.get();
+
+        if (queryResults == null || queryResults.getData() == null) {
+            return null;
+        }
+
+        return queryResults.getData();
     }
 
     @Override
@@ -258,6 +278,12 @@ class StatementClientV1
     {
         checkState(!isRunning(), "current position is still valid");
         return currentResults.get();
+    }
+
+    @Override
+    public Optional<String> getEncoding()
+    {
+        return resultRowsDecoder.getEncoding();
     }
 
     @Override
@@ -438,7 +464,6 @@ class StatementClientV1
         setCatalog.set(headers.get(TRINO_HEADERS.responseSetCatalog()));
         setSchema.set(headers.get(TRINO_HEADERS.responseSetSchema()));
         setPath.set(safeSplitToList(headers.get(TRINO_HEADERS.responseSetPath())));
-
         String setAuthorizationUser = headers.get(TRINO_HEADERS.responseSetAuthorizationUser());
         if (setAuthorizationUser != null) {
             this.setAuthorizationUser.set(setAuthorizationUser);

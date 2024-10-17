@@ -52,10 +52,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.slice.Slices.wrappedBuffer;
-import static io.trino.filesystem.Locations.appendPath;
 import static io.trino.plugin.deltalake.DeltaLakeErrorCode.DELTA_LAKE_BAD_WRITE;
 import static io.trino.plugin.deltalake.DeltaLakeSessionProperties.getCompressionCodec;
 import static io.trino.plugin.deltalake.DeltaLakeSessionProperties.getParquetWriterBlockSize;
@@ -154,25 +154,25 @@ public abstract class AbstractDeltaLakePageSink
         }
         for (int inputIndex = 0; inputIndex < inputColumns.size(); inputIndex++) {
             DeltaLakeColumnHandle column = inputColumns.get(inputIndex);
-            switch (column.getColumnType()) {
+            switch (column.columnType()) {
                 case PARTITION_KEY:
-                    int partitionPosition = toOriginalPartitionPositions.get(column.getColumnName());
+                    int partitionPosition = toOriginalPartitionPositions.get(column.columnName());
                     partitionColumnInputIndex[partitionPosition] = inputIndex;
-                    originalPartitionColumnNames[partitionPosition] = column.getColumnName();
-                    partitionColumnTypes[partitionPosition] = column.getBaseType();
+                    originalPartitionColumnNames[partitionPosition] = column.columnName();
+                    partitionColumnTypes[partitionPosition] = column.baseType();
                     break;
                 case REGULAR:
                     verify(column.isBaseColumn(), "Unexpected dereference: %s", column);
                     dataColumnHandles.add(column);
                     dataColumnsInputIndex.add(inputIndex);
-                    dataColumnNames.add(column.getBasePhysicalColumnName());
-                    dataColumnTypes.add(column.getBasePhysicalType());
+                    dataColumnNames.add(column.basePhysicalColumnName());
+                    dataColumnTypes.add(column.basePhysicalType());
                     break;
                 case SYNTHESIZED:
                     processSynthesizedColumn(column);
                     break;
                 default:
-                    throw new IllegalStateException("Unexpected column type: " + column.getColumnType());
+                    throw new IllegalStateException("Unexpected column type: " + column.columnType());
             }
         }
 
@@ -404,7 +404,13 @@ public abstract class AbstractDeltaLakePageSink
 
     private String getRelativeFilePath(Optional<String> partitionName, String fileName)
     {
-        return getPathPrefix() + partitionName.map(partition -> appendPath(partition, fileName)).orElse(fileName);
+        return getPathPrefix() + partitionName
+                .map(partition -> {
+                    // partition is escaped by makePartName
+                    checkArgument(!partition.endsWith("/"), "Partition name should not end with '/'");
+                    return partition + "/" + fileName;
+                })
+                .orElse(fileName);
     }
 
     protected void closeWriter(int writerIndex)

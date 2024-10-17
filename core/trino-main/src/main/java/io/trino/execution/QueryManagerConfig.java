@@ -54,7 +54,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
         "query.queue-config-file",
         "query.remote-task.max-consecutive-error-count",
         "query.remote-task.min-error-duration",
-        "retry-attempts",
+        "retry-attempts"
 })
 public class QueryManagerConfig
 {
@@ -108,7 +108,7 @@ public class QueryManagerConfig
     private double retryDelayScaleFactor = 2.0;
 
     private int maxTasksWaitingForExecutionPerQuery = 10;
-    private int maxTasksWaitingForNodePerStage = 5;
+    private int maxTasksWaitingForNodePerQuery = 50;
 
     private boolean enabledAdaptiveTaskRequestSize = true;
     private DataSize maxRemoteTaskRequestSize = DataSize.of(8, MEGABYTE);
@@ -132,7 +132,7 @@ public class QueryManagerConfig
     private int faultTolerantExecutionHashDistributionWriteTaskTargetMaxCount = 2000;
 
     private DataSize faultTolerantExecutionStandardSplitSize = DataSize.of(64, MEGABYTE);
-    private int faultTolerantExecutionMaxTaskSplitCount = 256;
+    private int faultTolerantExecutionMaxTaskSplitCount = 2048;
     private DataSize faultTolerantExecutionTaskDescriptorStorageMaxMemory = DataSize.ofBytes(round(AVAILABLE_HEAP_MEMORY * 0.15));
     private int faultTolerantExecutionMaxPartitionCount = 50;
     private int faultTolerantExecutionMinPartitionCount = 4;
@@ -149,7 +149,17 @@ public class QueryManagerConfig
     private double faultTolerantExecutionSmallStageSourceSizeMultiplier = 1.2;
     private boolean faultTolerantExecutionSmallStageRequireNoMorePartitions;
     private boolean faultTolerantExecutionStageEstimationForEagerParentEnabled = true;
-    private boolean faultTolerantExecutionAdaptiveQueryPlanningEnabled;
+    private boolean faultTolerantExecutionAdaptiveQueryPlanningEnabled = true;
+    private boolean faultTolerantExecutionAdaptiveJoinReorderingEnabled = true;
+    // Use a smaller threshold to change the order since the cost of changing the order is lower here. Additionally,
+    // the data size stats are more accurate compared to static planning since they are collected at run time from the
+    // stage execution.
+    private double faultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio = 1.5;
+    // With speculative execution, reordering small joins might cause unnecessary restarts of the
+    // join stage and lead to performance degradation. Hence, we only reorder if the size of the right side is
+    // above this threshold.
+    // TODO: Consider the cost of restarting the stage as part of adaptive planning.
+    private DataSize faultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold = DataSize.of(5, GIGABYTE);
 
     @Min(1)
     public int getScheduleSplitBatchSize()
@@ -669,16 +679,17 @@ public class QueryManagerConfig
     }
 
     @Min(1)
-    public int getMaxTasksWaitingForNodePerStage()
+    public int getMaxTasksWaitingForNodePerQuery()
     {
-        return maxTasksWaitingForNodePerStage;
+        return maxTasksWaitingForNodePerQuery;
     }
 
-    @Config("max-tasks-waiting-for-node-per-stage")
-    @ConfigDescription("Maximum possible number of tasks waiting for node allocation per stage before scheduling of new tasks for stage is paused")
-    public QueryManagerConfig setMaxTasksWaitingForNodePerStage(int maxTasksWaitingForNodePerStage)
+    @Config("max-tasks-waiting-for-node-per-query")
+    @LegacyConfig("max-tasks-waiting-for-node-per-stage") // TODO drop this alltogether in couple releases as name is misleading
+    @ConfigDescription("Maximum possible number of tasks waiting for node allocation per query before scheduling of new tasks for query is paused")
+    public QueryManagerConfig setMaxTasksWaitingForNodePerQuery(int maxTasksWaitingForNodePerQuery)
     {
-        this.maxTasksWaitingForNodePerStage = maxTasksWaitingForNodePerStage;
+        this.maxTasksWaitingForNodePerQuery = maxTasksWaitingForNodePerQuery;
         return this;
     }
 
@@ -1130,6 +1141,47 @@ public class QueryManagerConfig
     public QueryManagerConfig setFaultTolerantExecutionAdaptiveQueryPlanningEnabled(boolean faultTolerantExecutionSmallStageEstimationEnabled)
     {
         this.faultTolerantExecutionAdaptiveQueryPlanningEnabled = faultTolerantExecutionSmallStageEstimationEnabled;
+        return this;
+    }
+
+    public boolean isFaultTolerantExecutionAdaptiveJoinReorderingEnabled()
+    {
+        return faultTolerantExecutionAdaptiveJoinReorderingEnabled;
+    }
+
+    @Config("fault-tolerant-execution-adaptive-join-reordering-enabled")
+    @ConfigDescription("Reorder partitioned join based on run time stats in fault tolerant execution")
+    public QueryManagerConfig setFaultTolerantExecutionAdaptiveJoinReorderingEnabled(boolean faultTolerantExecutionAdaptiveJoinReorderingEnabled)
+    {
+        this.faultTolerantExecutionAdaptiveJoinReorderingEnabled = faultTolerantExecutionAdaptiveJoinReorderingEnabled;
+        return this;
+    }
+
+    @DecimalMin("1.0")
+    public double getFaultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio()
+    {
+        return faultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio;
+    }
+
+    @Config("fault-tolerant-execution-adaptive-join-reordering-size-difference-ratio")
+    @ConfigDescription("The ratio of difference in estimated size of right and left side of join to consider reordering")
+    public QueryManagerConfig setFaultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio(double faultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio)
+    {
+        this.faultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio = faultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio;
+        return this;
+    }
+
+    @NotNull
+    public DataSize getFaultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold()
+    {
+        return faultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold;
+    }
+
+    @Config("fault-tolerant-execution-adaptive-join-reordering-min-size-threshold")
+    @ConfigDescription("The minimum size of the right side of join to consider reordering")
+    public QueryManagerConfig setFaultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold(DataSize faultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold)
+    {
+        this.faultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold = faultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold;
         return this;
     }
 }

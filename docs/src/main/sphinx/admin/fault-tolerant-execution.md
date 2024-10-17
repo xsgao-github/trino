@@ -76,7 +76,7 @@ execution on a Trino cluster:
     the failure recovery capabilities to be fully functional" error message unless an 
     [exchange manager](fte-exchange-manager) is configured.
   - `32MB`
-* - `fault-tolerant-execution.exchange-encryption-enabled`
+* - `fault-tolerant-execution-exchange-encryption-enabled`
   - Enable encryption of spooling data, see [Encryption](fte-encryption) for details. 
     Setting this property to false is not recommended if Trino processes sensitive data.
   - ``true``
@@ -124,16 +124,11 @@ configuration properties have their default values changed to follow best
 practices for a fault-tolerant cluster. However, this automatic change does not
 affect clusters that have these properties manually configured. If you have
 any of the following properties configured in the `config.properties` file on
-a cluster with a `TASK` retry policy, it is strongly recommended to make the
-following changes:
-
-- Set the `task.low-memory-killer.policy`
-  {doc}`query management property </admin/properties-query-management>` to
-  `total-reservation-on-blocked-nodes`, or queries may
-  need to be manually killed if the cluster runs out of memory.
-- Set the `query.low-memory-killer.delay`
-  {doc}`query management property </admin/properties-query-management>` to
-  `0s` so the cluster immediately unblocks nodes that run out of memory.
+a cluster with a `TASK` retry policy, it is strongly recommended to set the
+`task.low-memory-killer.policy`
+{doc}`query management property </admin/properties-query-management>` to
+`total-reservation-on-blocked-nodes`, or queries may need to be manually killed
+if the cluster runs out of memory.
 
 :::{note}
 A `TASK` retry policy is best suited for large batch queries, but this
@@ -242,7 +237,7 @@ properties only apply to a `TASK` retry policy.
     May be overridden for the current session with the
     `fault_tolerant_execution_max_task_split_count` [session
     property](session-properties-definition).
-  - `256`
+  - `2048`
 * - `fault-tolerant-execution-arbitrary-distribution-compute-task-target-size-growth-period`
   - The number of tasks created for any given non-writer stage of arbitrary
     distribution before task size is increased.
@@ -301,7 +296,7 @@ available memory on a node, the task is restarted with a request to allocate the
 full node for its execution.
 
 The initial task memory-requirements estimation is static and configured with
-the `fault-tolerant-task-memory` configuration property. This property only
+the `fault-tolerant-execution-task-memory` configuration property. This property only
 applies to a `TASK` retry policy.
 
 :::{list-table} Node allocation configuration properties
@@ -368,10 +363,10 @@ fault-tolerant execution:
     property](session-properties-definition).
   - `50`
   - Only `TASK`
-* - `max-tasks-waiting-for-node-per-stage`
+* - `max-tasks-waiting-for-node-per-query`
   - Allow for up to configured number of tasks to wait for node allocation
-    per stage, before pausing scheduling for other tasks from this stage.
-  - 5
+    per query, before pausing scheduling for other tasks from this query.
+  - `50`
   - Only `TASK`
 :::
 
@@ -517,11 +512,13 @@ the property may be configured for:
   - HDFS
 :::
 
-It is recommended to set the `exchange.compression-codec` property to
-`LZ4` in the cluster's `config.properties` file, to reduce the exchange
-manager's overall I/O load. It is also recommended to configure a bucket
-lifecycle rule to automatically expire abandoned objects in the event of a node
-crash.
+To reduce the exchange manager's overall I/O load, the
+[](prop-exchange-compression-codec) configuration property defaults to `LZ4`. In
+addition, [](file-compression) is automatically performed and some details can
+be configured.
+
+It is also recommended to configure a bucket lifecycle rule to automatically
+expire abandoned objects in the event of a node crash.
 
 (fte-exchange-aws-s3)=
 #### AWS S3
@@ -529,9 +526,9 @@ crash.
 The following example `exchange-manager.properties` configuration specifies an
 AWS S3 bucket as the spooling storage destination. Note that the destination
 does not have to be in AWS, but can be any S3-compatible storage system. While
-the exchange manager is designed to support S3-compatible storage systems, not
-all such systems are tested for compatibility. To ensure your storage system is
-compatible, refer to your vendor's documentation.
+the exchange manager is designed to support S3-compatible storage systems, only
+AWS S3 and MinIO are tested for compatibility. For other storage systems,
+perform your own testing and consult your vendor for more information.
 
 ```properties
 exchange-manager.name=filesystem
@@ -622,3 +619,10 @@ from all worker nodes.
 exchange-manager.name=filesystem
 exchange.base-directories=/tmp/trino-exchange-manager
 ```
+
+## Adaptive plan optimizations
+
+Fault-tolerant execution mode offers several adaptive plan 
+optimizations that adjust query execution plans dynamically based on 
+runtime statistics. For more information, see 
+[](/optimizer/adaptive-plan-optimizations).

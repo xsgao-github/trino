@@ -32,6 +32,7 @@ import io.trino.spi.security.PrincipalType;
 import io.trino.spi.security.TrinoPrincipal;
 import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.VarcharType;
+import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.exceptions.BadRequestException;
 import org.apache.iceberg.rest.DelegatingRestSessionCatalog;
 import org.apache.iceberg.rest.RESTSessionCatalog;
@@ -79,7 +80,15 @@ public class TestTrinoRestCatalog
 
         restSessionCatalog.initialize(catalogName, properties);
 
-        return new TrinoRestCatalog(restSessionCatalog, new CatalogName(catalogName), NONE, "test", new TestingTypeManager(), useUniqueTableLocations);
+        return new TrinoRestCatalog(
+                restSessionCatalog,
+                new CatalogName(catalogName),
+                NONE,
+                ImmutableMap.of(),
+                Namespace.empty(),
+                "test",
+                new TestingTypeManager(),
+                useUniqueTableLocations);
     }
 
     @Test
@@ -111,7 +120,9 @@ public class TestTrinoRestCatalog
                     (connectorIdentity, fileIoProperties) -> {
                         throw new UnsupportedOperationException();
                     },
-                    new TableStatisticsWriter(new NodeVersion("test-version")));
+                    new TableStatisticsWriter(new NodeVersion("test-version")),
+                    Optional.empty(),
+                    false);
             assertThat(icebergMetadata.schemaExists(SESSION, namespace)).as("icebergMetadata.schemaExists(namespace)")
                     .isTrue();
             assertThat(icebergMetadata.schemaExists(SESSION, schema)).as("icebergMetadata.schemaExists(schema)")

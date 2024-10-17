@@ -79,7 +79,7 @@ public class TestQueryManagerConfig
                 .setRetryMaxDelay(new Duration(1, MINUTES))
                 .setRetryDelayScaleFactor(2.0)
                 .setMaxTasksWaitingForExecutionPerQuery(10)
-                .setMaxTasksWaitingForNodePerStage(5)
+                .setMaxTasksWaitingForNodePerQuery(50)
                 .setEnabledAdaptiveTaskRequestSize(true)
                 .setMaxRemoteTaskRequestSize(DataSize.of(8, DataSize.Unit.MEGABYTE))
                 .setRemoteTaskRequestSizeHeadroom(DataSize.of(2, DataSize.Unit.MEGABYTE))
@@ -98,7 +98,7 @@ public class TestQueryManagerConfig
                 .setFaultTolerantExecutionHashDistributionWriteTasksToNodesMinRatio(2.0)
                 .setFaultTolerantExecutionHashDistributionWriteTaskTargetMaxCount(2000)
                 .setFaultTolerantExecutionStandardSplitSize(DataSize.of(64, MEGABYTE))
-                .setFaultTolerantExecutionMaxTaskSplitCount(256)
+                .setFaultTolerantExecutionMaxTaskSplitCount(2048)
                 .setFaultTolerantExecutionTaskDescriptorStorageMaxMemory(DataSize.ofBytes(round(AVAILABLE_HEAP_MEMORY * 0.15)))
                 .setFaultTolerantExecutionMaxPartitionCount(50)
                 .setFaultTolerantExecutionMinPartitionCount(4)
@@ -112,7 +112,10 @@ public class TestQueryManagerConfig
                 .setFaultTolerantExecutionSmallStageSourceSizeMultiplier(1.2)
                 .setFaultTolerantExecutionSmallStageRequireNoMorePartitions(false)
                 .setFaultTolerantExecutionStageEstimationForEagerParentEnabled(true)
-                .setFaultTolerantExecutionAdaptiveQueryPlanningEnabled(false)
+                .setFaultTolerantExecutionAdaptiveQueryPlanningEnabled(true)
+                .setFaultTolerantExecutionAdaptiveJoinReorderingEnabled(true)
+                .setFaultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold(DataSize.of(5, GIGABYTE))
+                .setFaultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio(1.5)
                 .setMaxWriterTaskCount(100));
     }
 
@@ -157,7 +160,7 @@ public class TestQueryManagerConfig
                 .put("retry-max-delay", "1h")
                 .put("retry-delay-scale-factor", "2.3")
                 .put("max-tasks-waiting-for-execution-per-query", "22")
-                .put("max-tasks-waiting-for-node-per-stage", "3")
+                .put("max-tasks-waiting-for-node-per-query", "3")
                 .put("query.remote-task.enable-adaptive-request-size", "false")
                 .put("query.remote-task.max-request-size", "10MB")
                 .put("query.remote-task.request-size-headroom", "1MB")
@@ -191,7 +194,10 @@ public class TestQueryManagerConfig
                 .put("fault-tolerant-execution-small-stage-source-size-multiplier", "1.6")
                 .put("fault-tolerant-execution-small-stage-require-no-more-partitions", "true")
                 .put("fault-tolerant-execution-stage-estimation-for-eager-parent-enabled", "false")
-                .put("fault-tolerant-execution-adaptive-query-planning-enabled", "true")
+                .put("fault-tolerant-execution-adaptive-query-planning-enabled", "false")
+                .put("fault-tolerant-execution-adaptive-join-reordering-enabled", "false")
+                .put("fault-tolerant-execution-adaptive-join-reordering-min-size-threshold", "1GB")
+                .put("fault-tolerant-execution-adaptive-join-reordering-size-difference-ratio", "2")
                 .buildOrThrow();
 
         QueryManagerConfig expected = new QueryManagerConfig()
@@ -232,7 +238,7 @@ public class TestQueryManagerConfig
                 .setRetryMaxDelay(new Duration(1, HOURS))
                 .setRetryDelayScaleFactor(2.3)
                 .setMaxTasksWaitingForExecutionPerQuery(22)
-                .setMaxTasksWaitingForNodePerStage(3)
+                .setMaxTasksWaitingForNodePerQuery(3)
                 .setEnabledAdaptiveTaskRequestSize(false)
                 .setMaxRemoteTaskRequestSize(DataSize.of(10, DataSize.Unit.MEGABYTE))
                 .setRemoteTaskRequestSizeHeadroom(DataSize.of(1, DataSize.Unit.MEGABYTE))
@@ -265,7 +271,10 @@ public class TestQueryManagerConfig
                 .setFaultTolerantExecutionSmallStageSourceSizeMultiplier(1.6)
                 .setFaultTolerantExecutionSmallStageRequireNoMorePartitions(true)
                 .setFaultTolerantExecutionStageEstimationForEagerParentEnabled(false)
-                .setFaultTolerantExecutionAdaptiveQueryPlanningEnabled(true)
+                .setFaultTolerantExecutionAdaptiveQueryPlanningEnabled(false)
+                .setFaultTolerantExecutionAdaptiveJoinReorderingEnabled(false)
+                .setFaultTolerantExecutionAdaptiveJoinReorderingMinSizeThreshold(DataSize.of(1, GIGABYTE))
+                .setFaultTolerantExecutionAdaptiveJoinReorderingSizeDifferenceRatio(2.0)
                 .setMaxWriterTaskCount(101);
 
         assertFullMapping(properties, expected);
