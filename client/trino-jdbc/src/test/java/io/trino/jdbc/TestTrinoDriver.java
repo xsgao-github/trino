@@ -870,6 +870,12 @@ public class TestTrinoDriver
                         .put("assumeLiteralUnderscoreInMetadataCallsForNonConformingClients", "true")
                         .buildOrThrow())))
                 .isNotNull();
+
+        assertThat(DriverManager.getConnection(jdbcUrl(),
+                toProperties(ImmutableMap.<String, String>builder()
+                        .put("validateConnection", "true")
+                        .buildOrThrow())))
+                .isNotNull();
     }
 
     @Test
